@@ -10,12 +10,19 @@
 
 #include "tiny_obj_loader.h"
 
+//performance stuff
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <io.h>
+
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 texCoords;
 
-	Vertex() : position(0.0f), normal(0.0f), texCoords(0.0f) {}
+	Vertex() : position(0.0f), normal(0.0f), texCoords(0.0f) {};
+	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec2 texCoords) : position(position), normal(normal), texCoords(texCoords) {};
 };
 
 struct Texture {
@@ -32,8 +39,6 @@ struct Mesh {
 class Model {
 public:
 	Model(const std::string& filename, int shader = -1);
-	Model(std::vector<Vertex> ver, std::vector<GLuint> ind, std::vector<Texture> tex)
-		: mesh({ver, ind, tex}) { if (shader >= 0) this->shader = shader; setupMesh(); };
 
 	void addShader(GLuint shader) { this->shader = shader; }
 	void addTexture(Texture tex) { this->mesh.textures.push_back(tex); }
@@ -42,11 +47,17 @@ public:
 	const glm::vec3 scaleModel(glm::vec3 size);
 	const glm::vec4 rotateModel(glm::vec3 dir);
 
-	void createInstance(glm::vec3 position, glm::vec3 direction, glm::vec3 scale);
-	void updateInstance(int index, glm::vec3 position, glm::vec3 direction, glm::vec3 scale);
-	void updateInstance(int index, glm::vec3 position, glm::vec3 direction);
+	void createInstance(glm::vec3 position = {0, 0, 0}, glm::vec3 direction = glm::vec3{0, 0, 0}, glm::vec3 scale = {0, 0, 0});
+	void updateInstance(int index, glm::vec3 position, glm::vec3 direction, glm::vec3 scale = {0, 0, 0});
 
 	void draw();
+
+	Mesh* getMesh() { return &mesh; }
+	GLuint getShader() { return shader; }
+	GLuint getVAO() { return VAO; }
+
+	std::string getName() { return filename; }
+	std::string getPath() { return filepath; }
 
 	void debug() {
 		printf("Model file: %s\n", filename.c_str());
@@ -63,10 +74,10 @@ public:
 	}
 private:
 	Mesh mesh;
-	GLuint VAO, VBO, EBO, shader;
+	GLuint VAO, VBO, EBO, shader = -1;
 
 	// v debug info v
-	std::string filename = "";
+	std::string filepath, filename, bin;
 	glm::vec3 size;
 	std::vector<glm::mat4> instances;
 	std::vector<glm::vec3> scalars;

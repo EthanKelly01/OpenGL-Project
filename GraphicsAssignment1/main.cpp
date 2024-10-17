@@ -1,18 +1,23 @@
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
+#include "tfd/tinyfiledialogs.h"
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "ModelCode/Shaders.h"
-#include "ModelCode/Textures.h"
-#include "ModelCode/Model.h"
+#include "Shaders.h"
+#include "Model.h"
 
-#include "EngineObjects/FlyCam.h"
+#include "Camera.h"
+#include "FileSystem.h"
+#include "GUI.h"
 
-float windowWidth = 800.0f, windowHeight = 600.0f; //startup size
+float windowWidth = 1600.0f, windowHeight = 1200.0f; //startup size
 
-//TODO: ECS?
-std::vector<GLuint> shaders; //scene objects
-std::vector<GLuint> textures;
-std::vector<Model> models;
+GLFWwindow* window;
+Scene scene;
 FlyCam camera(windowWidth, windowHeight);
 
 float deltaTime = 0.0f, lastFrame = 0.0f; //timing
@@ -20,7 +25,7 @@ float deltaTime = 0.0f, lastFrame = 0.0f; //timing
 bool menu = 0, prevEsc = 0, firstMouse = 1, lastDebug = 0; //input stuff
 float lastX = windowWidth / 2, lastY = windowHeight / 2;
 
-const std::string vs = "shaders/myShader.vs", fs = "shaders/myShader.fs";
+//const std::string vs = "shaders/myShader.vs", fs = "shaders/myShader.fs";
 //const std::string vs = "shaders/lightShader.vs", fs = "shaders/lightShader.fs";
 const std::string containerTex = "assets/container.jpg", faceTex = "assets/awesomeface.png";
 const std::string obj1 = "assets/Vase.obj";
@@ -34,7 +39,7 @@ static void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
 		if (!lastDebug) {
 			camera.debug();
-			for (Model model : models) model.debug();
+			for (Model model : scene.models) model.debug();
 			lastDebug = 1;
 		}
 	} else lastDebug = 0;
@@ -98,7 +103,7 @@ int main() {
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     //create and configure window
-	GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight, "LearnOpenGL", NULL, NULL);
+	window = glfwCreateWindow(windowWidth, windowHeight, "MyProject", NULL, NULL);
 	if (!window) {
 		printf("Error: Failed to create GLFW window.\n");
 		glfwTerminate();
@@ -114,19 +119,20 @@ int main() {
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.0f, 0.5f, 1.0f, 1.0f); //rgba (alpha is opacity)
 
-	//build objects
-	shaders.push_back(buildProgram(vs, fs, 0));
+	//imgui setup
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
+	ImGui::StyleColorsDark();
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330");
 
-	textures.push_back(buildTexture(containerTex));
-	textures.push_back(buildTexture(faceTex));
-
-	models.push_back(Model(obj1, shaders[0]));
-	models[0].addTexture({ textures[0], "" });
-	models[0].addTexture({ textures[1], "" });
-	models[0].createInstance(glm::vec3(0, 0, 0), glm::vec3(10, 10, 10), glm::vec3(0, 5, 0));
-	models[0].createInstance(glm::vec3(10, 0, 0), glm::vec3(0, -1.0, 0), glm::vec3(0, 5, 0));
-
-	while (!glfwWindowShouldClose(window)) { //update loop
+	//main loop
+	while (!glfwWindowShouldClose(window)) {
 		deltaTime = glfwGetTime() - lastFrame;
 		lastFrame = glfwGetTime();
 
@@ -134,26 +140,51 @@ int main() {
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //just clears to some colour
 
-		std::pair<glm::mat4*, glm::mat4*> matrices = camera.getMatrices(); //applying matrices to shaders
+		//updating shaders with current camera matrices
+		std::pair<glm::mat4*, glm::mat4*> matrices = camera.getMatrices();
 		//glm::vec3 eye = camera.getPos();
 		//glm::mat3 normal = glm::transpose(glm::inverse(glm::mat3(*matrices.second)));
-		for (GLuint shader : shaders) {
-			glUniform3f(glGetUniformLocation(shader, "lightPos"), 30.0, 0.0, 0.0);
+		for (std::pair<std::string, GLuint> shader : scene.shaders) {
+			glUniform3f(glGetUniformLocation(shader.second, "lightPos"), 30.0, 0.0, 0.0);
 
-			glUseProgram(shader);
-			glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, glm::value_ptr(*matrices.first));
-			glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, glm::value_ptr(*matrices.second));
+			glUseProgram(shader.second);
+			glUniformMatrix4fv(glGetUniformLocation(shader.second, "projection"), 1, GL_FALSE, glm::value_ptr(*matrices.first));
+			glUniformMatrix4fv(glGetUniformLocation(shader.second, "view"), 1, GL_FALSE, glm::value_ptr(*matrices.second));
 
 			//lighting stuff
 			//glUniformMatrix3fv(glGetUniformLocation(shader, "normal"), 1, GL_FALSE, glm::value_ptr(normal));
 			//glUniform3f(glGetUniformLocation(shader, "eye"), eye.x, eye.y, eye.z);
 			//glUniform4f(glGetUniformLocation(shader, "colour"), 0.3f, 0.7f, 1.0f, 1.0f);
 		}
-		for (Model model : models) model.draw();
-		glfwSwapBuffers(window);
+		for (Model model : scene.models) model.draw();
 
+		//imgui
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+		//ImGui::DockSpaceOverViewport(); //allows dock to window but blocks rendering
+		renderUI(); //my function
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+		//render multiple windows for imgui
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+			GLFWwindow* backup_current_context = glfwGetCurrentContext();
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
+			glfwMakeContextCurrent(backup_current_context);
+		}
+
+		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
+	//shutdown procedure
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	glfwDestroyWindow(window);
 	glfwTerminate();
 	return 0;
 }
