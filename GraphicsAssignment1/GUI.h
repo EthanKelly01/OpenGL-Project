@@ -123,7 +123,7 @@ void renderUI() {
 			scene.models[0].addShader(scene.shaders.back().second);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Create")) scene.models[0].createInstance({0, 0, 0}, {0, 0, 0}, {0, 5, 0});
+		if (ImGui::Button("Create")) scene.models[0].instance();
 		ImGui::End();
 	}
 }

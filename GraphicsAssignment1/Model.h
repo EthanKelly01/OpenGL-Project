@@ -10,7 +10,6 @@
 
 #include "tiny_obj_loader.h"
 
-//performance stuff
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -46,16 +45,12 @@ public:
 
 	const glm::vec3 scaleModel(glm::vec3 size);
 	const glm::vec4 rotateModel(glm::vec3 dir);
-
-	void createInstance(glm::vec3 position = {0, 0, 0}, glm::vec3 direction = glm::vec3{0, 0, 0}, glm::vec3 scale = {0, 0, 0});
-	void updateInstance(int index, glm::vec3 position, glm::vec3 direction, glm::vec3 scale = {0, 0, 0});
-
+	void instance(glm::vec3 position = {0, 0, 0}, glm::vec3 direction = glm::vec3{0, 0, 0}, glm::vec3 scale = {0, 5, 0}, int index = -1);
 	void draw();
 
 	Mesh* getMesh() { return &mesh; }
-	GLuint getShader() { return shader; }
-	GLuint getVAO() { return VAO; }
-
+	GLuint getShader() const { return shader; }
+	GLuint getVAO() const { return VAO; }
 	std::string getName() { return filename; }
 	std::string getPath() { return filepath; }
 
@@ -64,11 +59,10 @@ public:
 		printf("Model raw scale: %f, %f, %f\n", size.x, size.y, size.z);
 		printf("Number of instances: %I64d\n********************************************\n", instances.size());
 		for (int i = 0; i < instances.size(); i++) {
-			glm::vec3 newScale = scalars[i] * size;
 			printf("\nInstance %d\n", i);
-			printf("Instance position: %f, %f, %f\n", positions[i].x, positions[i].y, positions[i].z);
-			printf("Instance direction: %f, %f, %f\n", directions[i].x, directions[i].y, directions[i].z);
-			printf("Instance scale: %f, %f, %f\n", newScale.x, newScale.y, newScale.z);
+			printf("Instance position: %f, %f, %f\n", instances[i][0].x, instances[i][0].y, instances[i][0].z);
+			printf("Instance direction: %f, %f, %f\n", instances[i][1].x, instances[i][1].y, instances[i][1].z);
+			printf("Instance scale: %f, %f, %f\n", instances[i][2].x, instances[i][2].y, instances[i][2].z);
 			printf("********************************************\n");
 		}
 	}
@@ -76,13 +70,9 @@ private:
 	Mesh mesh;
 	GLuint VAO, VBO, EBO, shader = -1;
 
-	// v debug info v
+	glm::mat4 transform = glm::mat4(1.0f);
+
 	std::string filepath, filename, bin;
 	glm::vec3 size;
-	std::vector<glm::mat4> instances;
-	std::vector<glm::vec3> scalars;
-	std::vector<glm::vec3> positions;
-	std::vector<glm::vec3> directions;
-	
-	void setupMesh();
+	std::vector<std::vector<glm::vec3>> instances;
 };

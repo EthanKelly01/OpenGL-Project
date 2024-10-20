@@ -25,11 +25,6 @@ float deltaTime = 0.0f, lastFrame = 0.0f; //timing
 bool menu = 0, prevEsc = 0, firstMouse = 1, lastDebug = 0; //input stuff
 float lastX = windowWidth / 2, lastY = windowHeight / 2;
 
-//const std::string vs = "shaders/myShader.vs", fs = "shaders/myShader.fs";
-//const std::string vs = "shaders/lightShader.vs", fs = "shaders/lightShader.fs";
-const std::string containerTex = "assets/container.jpg", faceTex = "assets/awesomeface.png";
-const std::string obj1 = "assets/Vase.obj";
-
 static void resizeWindow(GLFWwindow* window, int width, int height) { 
 	glViewport(0, 0, width, height);
 	camera.resizeWindow(windowWidth = width, windowHeight = height);
@@ -140,21 +135,11 @@ int main() {
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //just clears to some colour
 
-		//updating shaders with current camera matrices
-		std::pair<glm::mat4*, glm::mat4*> matrices = camera.getMatrices();
-		//glm::vec3 eye = camera.getPos();
-		//glm::mat3 normal = glm::transpose(glm::inverse(glm::mat3(*matrices.second)));
+		std::pair<glm::mat4*, glm::mat4*> matrices = camera.getMatrices(); //updating shaders with current camera matrices
 		for (std::pair<std::string, GLuint> shader : scene.shaders) {
-			glUniform3f(glGetUniformLocation(shader.second, "lightPos"), 30.0, 0.0, 0.0);
-
 			glUseProgram(shader.second);
-			glUniformMatrix4fv(glGetUniformLocation(shader.second, "projection"), 1, GL_FALSE, glm::value_ptr(*matrices.first));
-			glUniformMatrix4fv(glGetUniformLocation(shader.second, "view"), 1, GL_FALSE, glm::value_ptr(*matrices.second));
-
-			//lighting stuff
-			//glUniformMatrix3fv(glGetUniformLocation(shader, "normal"), 1, GL_FALSE, glm::value_ptr(normal));
-			//glUniform3f(glGetUniformLocation(shader, "eye"), eye.x, eye.y, eye.z);
-			//glUniform4f(glGetUniformLocation(shader, "colour"), 0.3f, 0.7f, 1.0f, 1.0f);
+			glUniformMatrix4fv(glGetUniformLocation(shader.second, "view"), 1, 0, glm::value_ptr(*matrices.second));
+			glUniformMatrix4fv(glGetUniformLocation(shader.second, "projection"), 1, 0, glm::value_ptr(*matrices.first));
 		}
 		for (Model model : scene.models) model.draw();
 
