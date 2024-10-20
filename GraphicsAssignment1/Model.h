@@ -35,16 +35,21 @@ struct Mesh {
 	std::vector<Texture> textures;
 };
 
+struct BufferData {
+	glm::mat4 transform;
+	glm::vec4 colour;
+};
+
 class Model {
 public:
 	Model(const std::string& filename, int shader = -1);
 
-	void addShader(GLuint shader) { this->shader = shader; }
 	void addTexture(Texture tex) { this->mesh.textures.push_back(tex); }
 	void addTexture(std::vector<Texture> tex) { mesh.textures.insert(mesh.textures.end(), tex.begin(), tex.end()); }
 
 	const glm::vec3 scaleModel(glm::vec3 size);
 	const glm::vec4 rotateModel(glm::vec3 dir);
+	void addShader(GLuint shader) { this->shader = shader; };
 	void instance(glm::vec3 position = {0, 0, 0}, glm::vec3 direction = glm::vec3{0, 0, 0}, glm::vec3 scale = {0, 5, 0}, int index = -1);
 	void draw();
 
@@ -70,7 +75,8 @@ private:
 	Mesh mesh;
 	GLuint VAO, VBO, EBO, shader = -1;
 
-	glm::mat4 transform = glm::mat4(1.0f);
+	GLuint transformBuffer;
+	std::vector<BufferData> bufferData;
 
 	std::string filepath, filename, bin;
 	glm::vec3 size;

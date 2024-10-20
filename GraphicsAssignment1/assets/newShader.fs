@@ -1,6 +1,8 @@
-#version 330 core
+#version 460 core
 in vec3 normal;
 in vec4 colour;
+
+out vec4 colourOut;
 
 void main() {
 	vec4 white = vec4(1.0, 1.0, 1.0, 1.0);
@@ -15,6 +17,5 @@ void main() {
 		specular = 0.0;
 	} else specular = pow(max(0.0, dot(N, H)), 100.0);
 
-	gl_FragColor = min(0.3*colour + 0.7*diffuse*colour + 0.7*white*specular, vec4(1.0));
-	gl_FragColor.a = colour.a;
+	colourOut = vec4(min(0.3*colour + 0.7*diffuse*colour + 0.7*white*specular, vec4(1.0)).xyz, colour.a);
 }

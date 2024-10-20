@@ -9,6 +9,7 @@ Model::Model(const std::string& filepath, int shader) {
 
 	if (shader >= 0) this->shader = shader;
 
+	//read object file
 	int nv, ni, result;
 	struct _stat buf;
 	if (extension == "bin" || _stat(bin.c_str(), &buf) == 0) {
@@ -112,6 +113,19 @@ Model::Model(const std::string& filepath, int shader) {
 		_close(file);
 	} else printf("Error: Can't load that filetype as a model.\n");
 
+	GLfloat* vertices = new GLfloat[nv * 8];
+	int j = 0;
+	for (int i = 0; i < nv; i++) {
+		vertices[j++] = mesh.vertices[i].position.x;
+		vertices[j++] = mesh.vertices[i].position.y;
+		vertices[j++] = mesh.vertices[i].position.z;
+		vertices[j++] = mesh.vertices[i].normal.x;
+		vertices[j++] = mesh.vertices[i].normal.y;
+		vertices[j++] = mesh.vertices[i].normal.z;
+		vertices[j++] = mesh.vertices[i].texCoords.x;
+		vertices[j++] = mesh.vertices[i].texCoords.y;
+	}
+
 	//setup mesh
 	glGenVertexArrays(1, &VAO);
 	glGenBuffers(1, &VBO);
@@ -120,22 +134,24 @@ Model::Model(const std::string& filepath, int shader) {
 	glBindVertexArray(VAO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
-	glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex), &mesh.vertices[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex), vertices, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(unsigned int), &mesh.indices[0], GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(GLuint), &mesh.indices[0], GL_STATIC_DRAW);
 
-	// vertex positions
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+	//point to vertex attributes
+	glVertexAttribPointer(0, 3, GL_FLOAT, 0, sizeof(Vertex), (void*)0);
 	glEnableVertexAttribArray(0);
-	// vertex normals
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+	glVertexAttribPointer(1, 3, GL_FLOAT, 0, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 	glEnableVertexAttribArray(1);
-	// vertex texture coords
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+
+	glVertexAttribPointer(2, 2, GL_FLOAT, 0, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 	glEnableVertexAttribArray(2);
 
 	glBindVertexArray(0);
+
+	glCreateBuffers(1, &transformBuffer);
 }
 
 const glm::vec3 Model::scaleModel(glm::vec3 newSize) {
@@ -167,76 +183,35 @@ const glm::vec4 Model::rotateModel(glm::vec3 dir) {
 }
 
 void Model::instance(glm::vec3 position, glm::vec3 direction, glm::vec3 scale, int index) {
-	if (index == -1) {
-		if (shader == -1) {
-			printf("No applied shader.\n");
-			return;
-		}
+	if (index >= (int)instances.size()) {
+		printf("Error: no object with that instance index.\n");
+		return;
+	}
+
+	if (index < 0) {
 		instances.push_back({ position, direction, scale });
-		glUseProgram(shader);
+		bufferData.push_back({ glm::mat4(1.0f), {1.0, 0.0, 0.0, 1.0 } });
+		index = bufferData.size() - 1;
+	} else if (index < (int)instances.size()) instances[index] = { position, direction, scale };
 
-		GLuint vbuffer, ibuffer;
-		GLfloat colours[] = { 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0 };
+	glm::vec4 rotation = rotateModel(instances[index][1]);
 
-		int nv = mesh.vertices.size();
-		int ni = mesh.indices.size();
-		GLfloat* vertices = new GLfloat[nv * 8];
-		int j = 0;
-		for (int i = 0; i < nv; i++) {
-			vertices[j++] = mesh.vertices[i].position.x;
-			vertices[j++] = mesh.vertices[i].position.y;
-			vertices[j++] = mesh.vertices[i].position.z;
-			vertices[j++] = mesh.vertices[i].normal.x;
-			vertices[j++] = mesh.vertices[i].normal.y;
-			vertices[j++] = mesh.vertices[i].normal.z;
-			vertices[j++] = mesh.vertices[i].texCoords.x;
-			vertices[j++] = mesh.vertices[i].texCoords.y;
-		}
+	bufferData[index].transform = glm::translate(bufferData[index].transform, instances[index][0]);
+	bufferData[index].transform = glm::rotate(bufferData[index].transform, rotation.w, glm::vec3(rotation.x, rotation.y, rotation.z));
+	bufferData[index].transform = glm::scale(bufferData[index].transform, scaleModel(instances[index][2]));
 
-		glGenBuffers(1, &vbuffer);
-		glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
-
-		glBufferData(GL_ARRAY_BUFFER, j * (sizeof GLfloat) + (sizeof colours), NULL, GL_STATIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, j * (sizeof GLfloat), vertices);
-		glBufferSubData(GL_ARRAY_BUFFER, j * (sizeof GLfloat), sizeof colours, colours);
-
-		GLuint location = glGetAttribLocation(shader, "vPosition");
-		glVertexAttribPointer(location, 3, GL_FLOAT, 0, 8 * (sizeof GLfloat), 0);
-		glEnableVertexAttribArray(location);
-
-		location = glGetAttribLocation(shader, "vNormal");
-		glVertexAttribPointer(location, 3, GL_FLOAT, 0, 8 * (sizeof GLfloat), (void*)(3 * sizeof(GLfloat)));
-		glEnableVertexAttribArray(location);
-
-		location = glGetAttribLocation(shader, "vTexture");
-		glVertexAttribPointer(location, 2, GL_FLOAT, 0, 8 * (sizeof GLfloat), (void*)(6 * sizeof(GLfloat)));
-		glEnableVertexAttribArray(location);
-
-		location = glGetAttribLocation(shader, "vColour");
-		glVertexAttribPointer(location, 4, GL_FLOAT, GL_FALSE, 0, (void*)(j * sizeof(GLfloat)));
-		glEnableVertexAttribArray(location);
-		glVertexAttribDivisor(location, 1);
-
-		glGenBuffers(1, &ibuffer);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuffer);
-
-		GLuint* indices = new GLuint[mesh.indices.size()];
-		for (int i = 0; i < mesh.indices.size(); i++) indices[i] = mesh.indices[i];
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(GLuint), indices, GL_STATIC_DRAW);
-	} else if (index < instances.size()) instances[index] = { position, direction, scale };
-	else printf("Error: no object with that instance index.\n");
-
-	glm::vec4 rotation = rotateModel(instances[0][1]);
-	transform = glm::translate(transform, instances[0][0]);
-	transform = glm::rotate(transform, rotation.w, glm::vec3(rotation.x, rotation.y, rotation.z));
-	transform = glm::scale(transform, scaleModel(instances[0][2]));
+	glNamedBufferStorage(transformBuffer, sizeof(BufferData) * bufferData.size(), (const void*)bufferData.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
 void Model::draw() {
+	if (instances.empty()) return;
 	if (!shader) {
 		printf("Can't draw without a valid shader.\n");
 		return;
 	}
+
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBuffer);
+	glUseProgram(shader);
 
 	unsigned int diffuseNr = 0, specularNr = 0, general = 0;
 	for (unsigned int i = 0; i < mesh.textures.size(); i++) {
@@ -250,8 +225,6 @@ void Model::draw() {
 		glUniform1i(glGetUniformLocation(shader, ("material" + name + number).c_str()), i);
 		glBindTexture(GL_TEXTURE_2D, mesh.textures[i].id);
 	}
-
-	glUniformMatrix4fv(glGetUniformLocation(shader, "transform"), 1, 0, glm::value_ptr(transform));
 
 	// draw mesh
 	glBindVertexArray(VAO);
